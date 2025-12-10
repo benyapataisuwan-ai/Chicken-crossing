@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chicken Crossing Game - Final</title>
+    
+    <style>
+        /* --- 1. CSS Styles --- */
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0ffdf;
+            margin: 0;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        #controls, #status {
+            margin-bottom: 10px;
+        }
+
+        #game-container {
+            width: 400px; /* Game width */
+            height: 600px; /* Game height */
+            background-color: #555; /* Dark color for the road */
+            border: 5px solid #333;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            max-width: 90vw; /* Responsive on mobile */
+        }
+        
+        /* The Player (Chicken) */
+        #player {
+            width: 25px;
+            height: 25px;
+            background-color: yellow; 
+            border: 2px solid orange;
+            border-radius: 5px;
+            position: absolute;
+            bottom: 0; 
+            transition: top 0.1s, left 0.1s;
+            z-index: 10;
+        }
+
+        /* Obstacle (Car) */
+        .car {
+            width: 50px;
+            height: 25px;
+            background-color: red;
+            position: absolute;
+            border-radius: 5px;
+        }
+
+        /* Message/Instruction Boxes (Unified Style) */
+        .overlay-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 30px;
+            background-color: #ffffff;
+            border: 3px solid #333;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 100;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            max-width: 80%;
+        }
+        
+        #instructions h2 {
+            color: green;
+        }
+
+        .hidden {
+            display: none;
+        }
+        
+        /* Mobile Touch Controls */
+        #controls-mobile {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+            width: 300px;
+        }
+
+        .control-btn {
+            padding: 15px 30px;
+            margin: 5px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            border: 2px solid #333;
+            border-radius: 8px;
+            background-color: #fff;
+            touch-action: manipulation;
+            user-select: none;
+        }
+
+        .horizontal-controls {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+        
+        /* Road lines */
+        .road-line {
+            position: absolute;
+            width: 100%;
+            height: 5px;
+            background-color: yellow;
+            opacity: 0.5;
+            z-index: 1; 
+        }
+        
+        /* Example road line positions */
+        .road-line:nth-child(1) { top: 100px; }
+        .road-line:nth-child(2) { top: 200px; }
+        .road-line:nth-child(3) { top: 300px; }
+        .road-line:nth-child(4) { top: 400px; }
+        .road-line:nth-child(5) { top: 500px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Cross the Road! 🐔</h1>
+        <div id="controls">
+            <label for="difficulty">Select Level:</label>
+            <select id="difficulty">
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+            </select>
+            <button id="startButton">Start Game</button>
+        </div>
+        <div id="status">Level: <span id="currentLevel">Easy</span> | Score: <span id="score">0</span></div>
+    </header>
+
+    <div id="game-container">
+        <div class="road-line"></div>
+        <div class="road-line"></div>
+        <div class="road-line"></div>
+        <div class="road-line"></div>
+        <div class="road-line"></div>
+        
+        <div id="player" class="chicken"></div>
+    </div>
+
+    <div id="controls-mobile">
+        <button id="up" class="control-btn">⬆️ Up</button>
+        <div class="horizontal-controls">
+            <button id="left" class="control-btn">⬅️ Left</button>
+            <button id="right" class="control-btn">➡️ Right</button>
+        </div>
+        <button id="down" class="control-btn">⬇️ Down</button>
+    </div>
+
+    <div id="instructions" class="overlay-box">
+        <h2>How to Play 🚦</h2>
+        <p>Your goal is to guide the yellow chicken from the bottom of the screen to the top.</p>
+        <ul>
+            <li>**Desktop:** Use the **Arrow Keys** to move.</li>
+            <li>**Mobile/Tablet:** Use the **On-Screen Buttons** to move.</li>
+            <li>**Avoid the Red Cars!** If a car hits the chicken, the game is over.</li>
+            <li>Each successful crossing earns 100 points.</li>
+        </ul>
+        <button id="dismissInstructions">Start Setup</button>
+    </div>
+
+    <div id="message-box" class="overlay-box hidden">
+        <h2>Game Over!</h2>
+        <p id="final-score"></p>
+        <button id="restartButton">Try Again</button>
+    </div>
+
+    <script>
+        /* --- 2. JavaScript Logic --- */
+        const player = document.getElementById('player');
+        const gameContainer = document.getElementById('game-container');
+        const difficultySelector = document.getElementById('difficulty');
+        const startButton = document.getElementById('startButton');
+        const messageBox = document.getElementById('message-box');
+        const restartButton = document.getElementById('restartButton');
+        const currentLevelDisplay = document.getElementById('currentLevel');
+        const scoreDisplay = document.getElementById('score');
+        const instructionsBox = document.getElementById('instructions'); // NEW element
+        const dismissInstructionsButton = document.getElementById('dismissInstructions'); // NEW element
+
+        const GAME_WIDTH = 400;
+        const GAME_HEIGHT = 600;
+        const PLAYER_SIZE = 25;
+        const PLAYER_START_Y = GAME_HEIGHT - PLAYER_SIZE;
+        const STEP = 20;
+
+        let gameInterval;
+        let carCreationInterval;
+        let isGameActive = false; 
+        let carSpeed = 5; 
+        let carSpawnRate = 1500;
+        let score = 0;
+
+        // --- Initial Setup/Reset ---
+
+        function resetPlayer() {
+            player.style.left = `${(GAME_WIDTH / 2) - (PLAYER_SIZE / 2)}px`;
+            player.style.top = `${PLAYER_START_Y}px`;
+        }
+
+        function clearCars() {
+            document.querySelectorAll('.car').forEach(car => car.remove());
+        }
+
+        function startGame() {
+            clearInterval(gameInterval);
+            clearInterval(carCreationInterval);
+            clearCars();
+            resetPlayer();
+            messageBox.classList.add('hidden');
+            
+            isGameActive = true; 
+            startButton.disabled = true;
+
+            const difficulty = difficultySelector.value;
+
+            // --- Level Configuration (FIXED MEDIUM) ---
+            if (difficulty === 'easy') {
+                carSpeed = 3;
+                carSpawnRate = 2000; 
+                currentLevelDisplay.textContent = 'Easy';
+            } else if (difficulty === 'medium') {
+                carSpeed = 6; // INCREASED SPEED
+                carSpawnRate = 1000; // INCREASED SPAWN FREQUENCY (FIXED)
+                currentLevelDisplay.textContent = 'Medium';
+            } else if (difficulty === 'hard') {
+                carSpeed = 8;
+                carSpawnRate = 600; 
+                currentLevelDisplay.textContent = 'Hard';
+            }
+
+            score = 0;
+            scoreDisplay.textContent = score;
+
+            gameInterval = setInterval(gameLoop, 50);
+            carCreationInterval = setInterval(createCar, carSpawnRate);
+        }
+
+        // --- Player Movement Logic ---
+
+        function movePlayer(direction) {
+            if (!isGameActive) return;
+
+            let top = parseInt(player.style.top) || PLAYER_START_Y;
+            let left = parseInt(player.style.left) || (GAME_WIDTH / 2) - (PLAYER_SIZE / 2);
+
+            switch (direction) {
+                case 'up':
+                    top = Math.max(0, top - STEP);
+                    break;
+                case 'down':
+                    top = Math.min(PLAYER_START_Y, top + STEP);
+                    break;
+                case 'left':
+                    left = Math.max(0, left - STEP);
+                    break;
+                case 'right':
+                    left = Math.min(GAME_WIDTH - PLAYER_SIZE, left + STEP);
+                    break;
+            }
+
+            player.style.top = `${top}px`;
+            player.style.left = `${left}px`;
+
+            if (top === 0) {
+                handleWin();
+            }
+        }
+
+        // --- Obstacle (Car) Logic ---
+
+        function createCar() {
+            const car = document.createElement('div');
+            car.className = 'car';
+            car.style.top = `-25px`;
+            
+            // Random lane position
+            const lane = Math.floor(Math.random() * (GAME_WIDTH - 50));
+            car.style.left = `${lane}px`; 
+
+            // Random car color 
+            const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+            car.style.backgroundColor = randomColor;
+
+            gameContainer.appendChild(car);
+        }
+
+        function moveCars() {
+            document.querySelectorAll('.car').forEach(car => {
+                let top = parseInt(car.style.top) || -25;
+                top += carSpeed;
+                car.style.top = `${top}px`;
+
+                if (top > GAME_HEIGHT) {
+                    car.remove();
+                }
+            });
+        }
+
+        // --- Collision and Game State ---
+
+        function checkCollision() {
+            const playerRect = player.getBoundingClientRect();
+            
+            document.querySelectorAll('.car').forEach(car => {
+                const carRect = car.getBoundingClientRect();
+
+                if (
+                    playerRect.left < carRect.right &&
+                    playerRect.right > carRect.left &&
+                    playerRect.top < carRect.bottom &&
+                    playerRect.bottom > carRect.top
+                ) {
+                    handleGameOver();
+                }
+            });
+        }
+
+        function handleWin() {
+            score += 100;
+            scoreDisplay.textContent = score;
+            resetPlayer(); 
+        }
+
+        function handleGameOver() {
+            clearInterval(gameInterval);
+            clearInterval(carCreationInterval);
+            isGameActive = false; 
+            startButton.disabled = false;
+            
+            messageBox.querySelector('h2').textContent = 'CRASH! Game Over';
+            document.getElementById('final-score').textContent = `Your Score: ${score}`;
+            messageBox.classList.remove('hidden');
+        }
+
+        function gameLoop() {
+            if (isGameActive) {
+                moveCars();
+                checkCollision();
+            }
+        }
+
+        // --- Event Listeners ---
+        
+        // Function to handle instruction dismissal
+        function dismissInstructions() {
+            instructionsBox.classList.add('hidden');
+            // Allow the user to select difficulty and click Start Game
+            startButton.disabled = false;
+        }
+
+        // 1. Keyboard Input (for desktop)
+        document.addEventListener('keydown', (event) => {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+                event.preventDefault(); 
+            }
+            if (isGameActive) { 
+                switch (event.key) {
+                    case 'ArrowUp':
+                        movePlayer('up');
+                        break;
+                    case 'ArrowDown':
+                        movePlayer('down');
+                        break;
+                    case 'ArrowLeft':
+                        movePlayer('left');
+                        break;
+                    case 'ArrowRight':
+                        movePlayer('right');
+                        break;
+                }
+            }
+        });
+
+        // 2. Touch/Click Input (for mobile)
+        document.querySelectorAll('.control-btn').forEach(button => {
+            const direction = button.id;
+            const handler = (event) => {
+                event.preventDefault(); 
+                movePlayer(direction);
+            };
+            button.addEventListener('touchstart', handler);
+            button.addEventListener('click', handler);
+        });
+
+        // 3. Game State Buttons
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame); 
+        dismissInstructionsButton.addEventListener('click', dismissInstructions); // NEW listener
+
+        // Initial setup
+        resetPlayer(); 
+        startButton.disabled = true; // NEW: Disable start button until instructions are dismissed
+    </script>
+</body>
+</html>
